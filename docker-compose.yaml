@@ -14,6 +14,11 @@ services:
   backend:
     image: python-backend:latest
     container_name: 'python-backend'
+    environment:
+      AMQP_HOST: rabbitmq
+      AMQP_PORT: 5672 #TODO: avoid duplicating via anchor/env
+      AMQP_USER: guest
+      AMQP_PASSWORD: guest
     ports:
         - 8888:8888
     networks:
