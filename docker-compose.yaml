@@ -1,29 +1,37 @@
-version: "3.2"
+version: "3"
 services:
   rabbitmq:
     image: rabbitmq:3-management-alpine
     container_name: 'rabbitmq'
     ports:
-        - 5672:5672
-        - 15672:15672
+      - ${AMQP_PORT:-5672}:5672
+      - ${AMQP_WEBPORT:-15672}:15672
     volumes:
-        - ./rabbitmq/data/:/var/lib/rabbitmq/
-        - ./rabbitmq/log/:/var/log/rabbitmq
+      - ${AMQP_VOLUME_DATA:-./rabbitmq/data}:/var/lib/rabbitmq
+      - ${AMQP_VOLUME_LOG:-./rabbitmq/log}:/var/log/rabbitmq
+    healthcheck:
+      test: rabbitmq-diagnostics -q ping
+      interval: 10s
+      timeout: 45s
+      retries: 4
     networks:
-        - rabbitnet
+      - rabbitnet
   backend:
+    build: ./backend
     image: python-backend:latest
     container_name: 'python-backend'
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
     environment:
-      AMQP_HOST: rabbitmq
-      AMQP_PORT: 5672 #TODO: avoid duplicating via anchor/env
-      AMQP_USER: guest
-      AMQP_PASSWORD: guest
-      PORTMQ: 8888
+      AMQP_HOST: ${AMQP_HOST:-rabbitmq}
+      AMQP_PORT: ${AMQP_PORT:-5672}
+      AMQP_USER: ${AMQP_USER:?}
+      AMQP_PASSWORD: ${AMQP_PASSWORD:?}
     ports:
-        - 8888:8888
+      - ${BACKEND_PORT:-8888}:8888
     networks:
-        - rabbitnet
+      - rabbitnet
 
 networks:
   rabbitnet:

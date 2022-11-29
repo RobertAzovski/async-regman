@@ -8,33 +8,44 @@ import tornado.ioloop
 import tornado.escape
 
 
+AMQP_HOST = os.environ.get('AMQP_HOST')
+AMQP_PORT = os.environ.get('AMQP_PORT')
+AMQP_USER = os.environ.get('AMQP_USER')
+AMQP_PASSWORD = os.environ.get('AMQP_PASSWORD')
+
+
 async def pika_produce_message(json_data):
     await print(json_data)
-    connection = await aio_pika.connect_robust(
-        f"amqp://{AMQP_USER}:{AMQP_PASSWORD}@127.0.0.1/",
-    )
+    queue_name = "form_data"
+    # create connection
+    amqp_connection = await connect_robust(
+                                host=AMQP_HOST,
+                                port=AMQP_PORT,
+                                login=AMQP_USER,
+                                password=AMQP_PASSWORD)
 
-    async with connection:
-        routing_key = "form_data"
-        channel = await connection.channel()
+    async with amqp_connection:
+        channel = await amqp_connection.channel()
+        queue = await channel.declare_queue(queue_name, auto_delete=True)
 
         await channel.default_exchange.publish(
             aio_pika.Message(body=json_data),
-            routing_key=routing_key,
+            routing_key=queue_name,
         )
 
 
 async def pika_consume_message():
-    logging.basicConfig(level=logging.DEBUG)
-    connection = await aio_pika.connect_robust(
-        f"amqp://{AMQP_USER}:{AMQP_PASSWORD}@127.0.0.1/",
-    )
+    amqp_connection = await connect_robust(
+                                host=AMQP_HOST,
+                                port=AMQP_PORT,
+                                login=AMQP_USER,
+                                password=AMQP_PASSWORD)
 
     queue_name = "form_data"
 
-    async with connection:
+    async with amqp_connection:
         # Creating channel
-        channel = await connection.channel()
+        channel = await amqp_connection.channel()
 
         # Will take no more than 10 messages in advance
         await channel.set_qos(prefetch_count=10)
@@ -50,6 +61,9 @@ async def pika_consume_message():
                     if queue.name in message.body.decode():
                         break
 
+class ReadMessageHandler(tornado.web.RequestHandler):
+    async def get(self):
+        self.write(pika_consume_message())
 
 class MainHandler(tornado.web.RequestHandler):
     async def get(self):
@@ -67,21 +81,24 @@ class MainHandler(tornado.web.RequestHandler):
         json_data = tornado.escape.json_encode(data)
         await pika_produce_message(json_data)
 
-        self.redirect('/')
+        self.redirect('/success')
 
 
-settings = {
-    "cookie_secret": token_urlsafe(),
-    "form_url": "/",
-    "xsrf_cookies": True,
-}
-application = tornado.web.Application([
-    (r"/", MainHandler),
-], **settings)
+async def make_app():
+
+    settings = {
+        "cookie_secret": token_urlsafe(),
+        "form_url": "/",
+        "xsrf_cookies": True,
+    }
+    return tornado.web.Application([
+        (r"/", MainHandler),
+        (r"/success", ReadMessageHandler),
+    ], **settings)
 
 
 if __name__ == '__main__':
-    app = application
-    app.listen(PORTMQ)
-    print(f'Server is listening localhost port - {PORTMQ}')
+    app = make_app()
+    app.listen(8888)
+    print(f'Server is listening localhost port - 8888')
     tornado.ioloop.IOLoop.current().start()

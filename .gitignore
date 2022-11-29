@@ -1,3 +1,5 @@
 .venv
 rabbitmq/log
 rabbitmq/data
+.env
+logs.txt
