@@ -19,6 +19,7 @@ services:
       AMQP_PORT: 5672 #TODO: avoid duplicating via anchor/env
       AMQP_USER: guest
       AMQP_PASSWORD: guest
+      PORTMQ: 8888
     ports:
         - 8888:8888
     networks:

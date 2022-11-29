@@ -1,79 +1,87 @@
-import asyncio
-import datetime
-import json
-import os
+from secrets import token_urlsafe
 
-import tornado.web
-from tornado.httputil import HTTPServerRequest
 import aio_pika
-from aio_pika import Message, connect_robust
+import tornado.web
+import tornado.options
+import tornado.concurrent
+import tornado.ioloop
+import tornado.escape
 
-class MainHandler(tornado.web.RequestHandler):
-    def get(self):
-        self.write("Hello, world")
 
-class Base:
-    QUEUE: asyncio.Queue
+async def pika_produce_message(json_data):
+    await print(json_data)
+    connection = await aio_pika.connect_robust(
+        f"amqp://{AMQP_USER}:{AMQP_PASSWORD}@127.0.0.1/",
+    )
 
-class SubscriberHandler(tornado.web.RequestHandler, Base):
-    async def get(self) -> None:
-        message = await self.QUEUE.get()
-        await self.finish(message.body)
-
-class PublisherHandler(tornado.web.RequestHandler):
-    async def get(self, *args, **kwargs) -> None:
-        r: HTTPServerRequest = self.request
-        now = datetime.datetime.now()
-        data = {
-            'method' : r.method,
-            'address' : r.remote_ip,
-            'date' : f'{now}',
-        }
-        serialized = json.dumps(data)
-        print(serialized)
-        # dump data back to client for debug
-        self.write(data)
-        self.set_header('Content-Type', 'application/json')
-
-        # actual amqp publish
-        connection = self.application.settings["amqp_connection"]
+    async with connection:
+        routing_key = "form_data"
         channel = await connection.channel()
 
-        try:
-            await channel.default_exchange.publish(
-                Message(body=serialized.encode()),
-                routing_key="test",
-            )
-        finally:
-            await channel.close()
+        await channel.default_exchange.publish(
+            aio_pika.Message(body=json_data),
+            routing_key=routing_key,
+        )
 
-        await self.finish()
 
-async def make_app() -> tornado.web.Application:
-    amqp_host = os.environ.get('AMQP_HOST')
-    amqp_port = os.environ.get('AMQP_PORT')
-    amqp_user = os.environ.get('AMQP_USER')
-    amqp_password = os.environ.get('AMQP_PASSWORD')
-    if not all([amqp_host, amqp_port, amqp_user, amqp_password]):
-        raise NotImplentedError
-    amqp_connection = await connect_robust(f'amqp://{amqp_user}:{amqp_password}@{amqp_host}:{amqp_port}')
+async def pika_consume_message():
+    logging.basicConfig(level=logging.DEBUG)
+    connection = await aio_pika.connect_robust(
+        f"amqp://{AMQP_USER}:{AMQP_PASSWORD}@127.0.0.1/",
+    )
 
-    channel = await amqp_connection.channel()
-    queue = await channel.declare_queue("test", auto_delete=True)
-    Base.QUEUE = asyncio.Queue()
+    queue_name = "form_data"
 
-    await queue.consume(Base.QUEUE.put, no_ack=True)
+    async with connection:
+        # Creating channel
+        channel = await connection.channel()
 
-    return tornado.web.Application([
-        (r"/", MainHandler),
-        (r"/api/publish", PublisherHandler),
-        (r"/api/subscribe", SubscriberHandler)],
-        amqp_connection=amqp_connection)
+        # Will take no more than 10 messages in advance
+        await channel.set_qos(prefetch_count=10)
 
-async def main():
-    app = await make_app()
-    app.listen(8888)
-    await asyncio.Future()
+        # Declaring queue
+        queue = await channel.declare_queue(queue_name, auto_delete=True)
 
-if __name__ == "__main__":
-    asyncio.run(main())
+        async with queue.iterator() as queue_iter:
+            async for message in queue_iter:
+                async with message.process():
+                    print(message.body)
+
+                    if queue.name in message.body.decode():
+                        break
+
+
+class MainHandler(tornado.web.RequestHandler):
+    async def get(self):
+        self.render('frontend/templates/index.html')
+
+    async def post(self):
+        data = {
+            'firstname': self.get_argument('firstname'),
+            'surname': self.get_argument('surname'),
+            'middlename': self.get_argument('middlename'),
+            'phone_number': self.get_argument('phone_number'),
+            'text_message': self.get_argument('text_message'),
+        }
+
+        json_data = tornado.escape.json_encode(data)
+        await pika_produce_message(json_data)
+
+        self.redirect('/')
+
+
+settings = {
+    "cookie_secret": token_urlsafe(),
+    "form_url": "/",
+    "xsrf_cookies": True,
+}
+application = tornado.web.Application([
+    (r"/", MainHandler),
+], **settings)
+
+
+if __name__ == '__main__':
+    app = application
+    app.listen(PORTMQ)
+    print(f'Server is listening localhost port - {PORTMQ}')
+    tornado.ioloop.IOLoop.current().start()
