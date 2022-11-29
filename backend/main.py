@@ -1,4 +1,6 @@
 from secrets import token_urlsafe
+import os
+import asyncio
 
 import aio_pika
 import tornado.web
@@ -67,7 +69,7 @@ class ReadMessageHandler(tornado.web.RequestHandler):
 
 class MainHandler(tornado.web.RequestHandler):
     async def get(self):
-        self.render('frontend/templates/index.html')
+        self.render('templates/index.html')
 
     async def post(self):
         data = {
@@ -77,7 +79,8 @@ class MainHandler(tornado.web.RequestHandler):
             'phone_number': self.get_argument('phone_number'),
             'text_message': self.get_argument('text_message'),
         }
-
+        await print('data from form:')
+        await print(data)
         json_data = tornado.escape.json_encode(data)
         await pika_produce_message(json_data)
 
@@ -97,8 +100,12 @@ async def make_app():
     ], **settings)
 
 
-if __name__ == '__main__':
-    app = make_app()
+async def main():
+    app = await make_app()
     app.listen(8888)
     print(f'Server is listening localhost port - 8888')
-    tornado.ioloop.IOLoop.current().start()
+    await asyncio.Future()
+
+
+if __name__ == '__main__':
+    asyncio.run(main())
