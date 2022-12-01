@@ -23,7 +23,7 @@ async def pika_consume(amqp_connection) -> None:
         async with queue.iterator() as queue_iter:
             async for message in queue_iter:
                 async with message.process():
-                    print(message.body)
+                    print(message.body, flush=True)
 
 
 async def main():

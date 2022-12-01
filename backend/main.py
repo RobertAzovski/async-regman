@@ -51,10 +51,10 @@ class MainHandler(tornado.web.RequestHandler):
 
 
 async def make_app() -> tornado.web.Application:
-    amqp_host = await os.environ.get('AMQP_HOST')
-    amqp_port = await os.environ.get('AMQP_PORT')
-    amqp_user = await os.environ.get('AMQP_USER')
-    amqp_password = await os.environ.get('AMQP_PASSWORD')
+    amqp_host = os.environ.get('AMQP_HOST')
+    amqp_port = os.environ.get('AMQP_PORT')
+    amqp_user = os.environ.get('AMQP_USER')
+    amqp_password = os.environ.get('AMQP_PASSWORD')
     # throw error if amqp details not defined
     if not all([amqp_host, amqp_port, amqp_user, amqp_password]):
         raise NotImplementedError
