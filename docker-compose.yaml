@@ -34,7 +34,7 @@ services:
       - rabbitnet
   servicedb:
     build: ./servicedb
-    image: servicedb:latest
+    image: python-servicedb:latest
     container_name: 'python-servicedb'
     depends_on:
       rabbitmq:
