@@ -1,6 +1,7 @@
 from secrets import token_urlsafe
 import os
 import asyncio
+import json
 
 import aio_pika
 import tornado.web
@@ -10,62 +11,25 @@ import tornado.ioloop
 import tornado.escape
 
 
-AMQP_HOST = os.environ.get('AMQP_HOST')
-AMQP_PORT = os.environ.get('AMQP_PORT')
-AMQP_USER = os.environ.get('AMQP_USER')
-AMQP_PASSWORD = os.environ.get('AMQP_PASSWORD')
-
-
-async def pika_produce_message(json_data):
-    await print(json_data)
+async def pika_produce_message(json_data, amqp_connection):
+    print(json_data, flush=True)
     queue_name = "form_data"
-    # create connection
-    amqp_connection = await connect_robust(
-                                host=AMQP_HOST,
-                                port=AMQP_PORT,
-                                login=AMQP_USER,
-                                password=AMQP_PASSWORD)
 
     async with amqp_connection:
         channel = await amqp_connection.channel()
         queue = await channel.declare_queue(queue_name, auto_delete=True)
 
+        json_string = json.dumps(json_data)
         await channel.default_exchange.publish(
-            aio_pika.Message(body=json_data),
+            aio_pika.Message(body=json_string.encode()),
             routing_key=queue_name,
         )
 
 
-async def pika_consume_message():
-    amqp_connection = await connect_robust(
-                                host=AMQP_HOST,
-                                port=AMQP_PORT,
-                                login=AMQP_USER,
-                                password=AMQP_PASSWORD)
-
-    queue_name = "form_data"
-
-    async with amqp_connection:
-        # Creating channel
-        channel = await amqp_connection.channel()
-
-        # Will take no more than 10 messages in advance
-        await channel.set_qos(prefetch_count=10)
-
-        # Declaring queue
-        queue = await channel.declare_queue(queue_name, auto_delete=True)
-
-        async with queue.iterator() as queue_iter:
-            async for message in queue_iter:
-                async with message.process():
-                    print(message.body)
-
-                    if queue.name in message.body.decode():
-                        break
-
-class ReadMessageHandler(tornado.web.RequestHandler):
+class SuccessHandler(tornado.web.RequestHandler):
     async def get(self):
-        self.write(pika_consume_message())
+        self.write('Success !!!')
+
 
 class MainHandler(tornado.web.RequestHandler):
     async def get(self):
@@ -79,15 +43,30 @@ class MainHandler(tornado.web.RequestHandler):
             'phone_number': self.get_argument('phone_number'),
             'text_message': self.get_argument('text_message'),
         }
-        await print('data from form:')
-        await print(data)
+        amqp_connection = self.application.settings["amqp_connection"]
         json_data = tornado.escape.json_encode(data)
-        await pika_produce_message(json_data)
+        await pika_produce_message(json_data, amqp_connection)
 
         self.redirect('/success')
 
 
-async def make_app():
+async def make_app() -> tornado.web.Application:
+    amqp_host = await os.environ.get('AMQP_HOST')
+    amqp_port = await os.environ.get('AMQP_PORT')
+    amqp_user = await os.environ.get('AMQP_USER')
+    amqp_password = await os.environ.get('AMQP_PASSWORD')
+    # throw error if amqp details not defined
+    if not all([amqp_host, amqp_port, amqp_user, amqp_password]):
+        raise NotImplementedError
+
+    amqp_connection = await aio_pika.connect_robust(
+                                host=amqp_host,
+                                port=amqp_port,
+                                login=amqp_user,
+                                password=amqp_password)
+
+    channel = await amqp_connection.channel()
+    queue = await channel.declare_queue("form_data", auto_delete=True)
 
     settings = {
         "cookie_secret": token_urlsafe(),
@@ -96,8 +75,9 @@ async def make_app():
     }
     return tornado.web.Application([
         (r"/", MainHandler),
-        (r"/success", ReadMessageHandler),
-    ], **settings)
+        (r"/success", SuccessHandler),],
+        amqp_connection=amqp_connection,
+        **settings)
 
 
 async def main():

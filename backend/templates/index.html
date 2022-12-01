@@ -18,6 +18,7 @@
       color: #eee;
       }
       body {
+      text-align: center;
       background: url("/uploads/media/default/0001/01/b5edc1bad4dc8c20291c8394527cb2c5b43ee13c.jpeg") no-repeat center;
       background-size: cover;
       }
@@ -47,12 +48,23 @@
       font-size: 72px;
       }
       form {
+      display: inline-block;
+      width: 800px;
       background: rgba(0, 0, 0, 0.7); 
       }
       .title {
       display: flex;
       align-items: center;
       margin-bottom: 20px;
+      }
+      input.form-control, textarea {
+        width: 75%;
+      }
+      div.title {
+        width: 75%;
+      }
+      .required {
+        color: red
       }
       .info {
       display: flex;
@@ -114,20 +126,22 @@
   <body>
     <div class="container py-5">
       <div class="row justify-content-center">
-        <form action="/success" method="post">
+        <form action="/" method="post">
 	        {% module xsrf_form_html() %}
-          <div class="title">
-            <i class="fas fa-pencil-alt"></i> 
-            <h2>Форма обращения гражданина</h2>
+          <div class="container">
+            <div class="title">
+              <i class="fas fa-pencil-alt"></i> 
+              <h2>Форма обращения гражданина</h2>
+            </div>
+            <div class="info">
+              <div><input class="form-control" type="text" name="firstname" placeholder="Имя" required><span class="required">*</span></div>
+              <div><input class="form-control" type="text" name="surname" placeholder="Фамилия" required><span class="required">*</span></div>
+              <div><input class="form-control" type="text" name="middlename" placeholder="Отчество"></div>
+              <div><input class="form-control" name="phone_number" placeholder="Телефон" pattern="/(7|8)\d{10}/" required><span class="required">*</span></div>
+              <div><textarea id="story" name="text_message" rows="5" cols="33" placeholder ="Текст обращения" required></textarea></div>
+            </div>
+            <button type="submit" href="/">Отправить</button>
           </div>
-          <div class="info">
-            <input class="form-control" type="text" name="firstname" placeholder="Имя">
-	          <input class="form-control" type="text" name="surname" placeholder="Фамилия">
-            <input class="form-control" type="text" name="middlename" placeholder="Отчество">
-            <input class="form-control" name="phone_number" placeholder="Телефон">
-	          <textarea id="story" name="text_message" rows="5" cols="33" placeholder ="Текст обращения"></textarea>
-          </div>
-          <button type="submit" href="/">Отправить</button>
         </form>
       </div>
     </div>
