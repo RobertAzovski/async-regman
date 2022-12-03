@@ -3,3 +3,5 @@ rabbitmq/log
 rabbitmq/data
 .env
 logs.txt
+db
+pgadmin
