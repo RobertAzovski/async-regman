@@ -1,10 +1,68 @@
-import asyncio
 import os
+import asyncio
 
+import databases
 import aio_pika
+import aiohttp
+import sqlalchemy
 from fastapi import FastAPI
 from pydantic import BaseModel
 
+# SQLAlchemy specific code, as with any other app
+# DATABASE_URL = "sqlite:///./test.db"
+DATABASE_URL = "postgresql://user:password@postgresserver/db"
+
+database = databases.Database(DATABASE_URL)
+
+metadata = sqlalchemy.MetaData()
+
+appeals = sqlalchemy.Table(
+    "appeals",
+    metadata,
+    sqlalchemy.Column("id", sqlalchemy.Integer, primary_key=True),
+    sqlalchemy.Column("firstname", sqlalchemy.String),
+    sqlalchemy.Column("surname", sqlalchemy.String),
+    sqlalchemy.Column("middlename", sqlalchemy.String),
+    sqlalchemy.Column("phone_number", sqlalchemy.Integer),
+    sqlalchemy.Column("text_message", sqlalchemy.String),
+)
+
+
+engine = sqlalchemy.create_engine(
+    DATABASE_URL,
+)
+metadata.create_all(engine)
+
+class Appeal(BaseModel):
+    firstname: str
+    surname: str
+    middlename: str
+    phone_number: int
+    text_message: str
+
+
+app = FastAPI()
+
+
+@app.on_event("startup")
+async def startup():
+    await database.connect()
+
+
+@app.on_event("shutdown")
+async def shutdown():
+    await database.disconnect()
+
+@app.post("/appeal/", response_model=Appeal)
+async def create_note(appeal: Appeal):
+    query = appeals.insert().values(
+        firstname=appeal.firstname,
+        surname=appeal.surname,
+        middlename=appeal.middlename,
+        phone_number=appeal.phone_number,
+        text_message=appeal.text_message)
+    last_record_id = await database.execute(query)
+    return {**appeal.dict(), "id": last_record_id}
 
 async def pika_consume(amqp_connection) -> None:
 
@@ -23,7 +81,8 @@ async def pika_consume(amqp_connection) -> None:
         async with queue.iterator() as queue_iter:
             async for message in queue_iter:
                 async with message.process():
-                    print(message.body, flush=True)
+                    async with aiohttp.ClientSession() as session:
+                        await session.post('/appeal/', data=message.body)
 
 
 async def main():

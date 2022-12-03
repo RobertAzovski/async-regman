@@ -48,7 +48,43 @@ services:
       - ${SERVICEDB_PORT:-8883}:8883
     networks:
       - rabbitnet
+  postgres:
+    container_name: db
+    image: postgres:latest
+    environment:
+      POSTGRES_DB: ${DB_NAME:-regmandb}
+      POSTGRES_USER: ${DB_USER:?}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?}
+      PGDATA: "/var/lib/postgresql/data/pgdata"
+    volumes:
+      - ./db/data:/var/lib/postgresql/data
+    ports:
+      - ${DB_PORT:-5432}:5432
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER} -d ${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    networks:
+      - postgres
+  
+  pgadmin:
+    container_name: pgadmin
+    image: dpage/pgadmin4:latest
+    environment:
+      PGADMIN_DEFAULT_EMAIL: ${PGADMIN_DEFAULT_EMAIL:?}
+      PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_DEFAULT_PASSWORD:?}
+      PGADMIN_CONFIG_SERVER_MODE: "False"
+    volumes:
+      - ./pgadmin/data:/var/lib/pgadmin
+    ports:
+      - "5050:80"
+    networks:
+      - postgres
 
 networks:
   rabbitnet:
+    driver: bridge
+  postgres:
     driver: bridge
