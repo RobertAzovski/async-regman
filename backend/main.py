@@ -15,10 +15,7 @@ async def pika_produce_message(json_data, amqp_connection):
     print(json_data, flush=True)
     queue_name = "form_data"
 
-    async with amqp_connection:
-        channel = await amqp_connection.channel()
-        queue = await channel.declare_queue(queue_name, auto_delete=True)
-
+    async with amqp_connection.channel() as channel:
         json_string = json.dumps(json_data)
         await channel.default_exchange.publish(
             aio_pika.Message(body=json_string.encode()),
@@ -66,7 +63,8 @@ async def make_app() -> tornado.web.Application:
                                 password=amqp_password)
 
     channel = await amqp_connection.channel()
-    queue = await channel.declare_queue("form_data", auto_delete=True)
+    queue = await channel.declare_queue("form_data", auto_delete=False)
+    await channel.close()
 
     settings = {
         "cookie_secret": token_urlsafe(),

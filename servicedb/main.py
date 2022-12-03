@@ -8,9 +8,15 @@ import sqlalchemy
 from fastapi import FastAPI
 from pydantic import BaseModel
 
+
+DB_HOST = os.environ.get('DB_HOST')
+DB_PORT = os.environ.get('DB_PORT')
+DB_USER = os.environ.get('DB_USER')
+DB_PASSWORD = os.environ.get('DB_PASSWORD')
+DB_NAME = os.environ.get('DB_NAME')
+DATABASE_URL = f"postgresql://{DB_USER}:{DB_PASSWORD}@{DB_HOST}:{DB_PORT}/{DB_NAME}"
 # SQLAlchemy specific code, as with any other app
 # DATABASE_URL = "sqlite:///./test.db"
-DATABASE_URL = "postgresql://user:password@postgresserver/db"
 
 database = databases.Database(DATABASE_URL)
 
@@ -68,15 +74,12 @@ async def pika_consume(amqp_connection) -> None:
 
     queue_name = "form_data"
 
-    async with amqp_connection:
-        # Creating channel
-        channel = await amqp_connection.channel()
-
+    async with amqp_connection.channel() as channel:
         # Will take no more than 10 messages in advance
         await channel.set_qos(prefetch_count=10)
 
         # Declaring queue
-        queue = await channel.declare_queue(queue_name, auto_delete=True)
+        queue = await channel.declare_queue(queue_name)
 
         async with queue.iterator() as queue_iter:
             async for message in queue_iter:
