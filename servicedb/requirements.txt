@@ -1,3 +1,6 @@
 aio-pika
 fastapi
 sqlalchemy
+databases[asyncpg]
+aiohttp
+psycopg2-binary
