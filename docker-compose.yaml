@@ -50,7 +50,7 @@ services:
       DB_PASSWORD: ${DB_PASSWORD:?}
       DB_NAME: ${DB_NAME:?}
     ports:
-      - ${SERVICEDB_PORT:-8883}:8883
+      - ${SERVICEDB_PORT:-8883}:8000
     networks:
       - rabbitnet
       - postgres
